@@ -1,0 +1,473 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Fuzzle and the Shifting Woods</title>
+<meta name="description" content="A cute roguelite adventure: Fuzzle gathers three Heart Crystals to free his family from the warlock Oink, through cursed lands that reshape every time you fall.">
+<meta name="theme-color" content="#21402b">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap">
+<style>
+:root {
+  color-scheme: dark;
+  --forest: #21402b;
+  --cream: #fff8e6;
+  --cream-2: #ffefc9;
+  --navy: #1d3f8a;
+  --navy-ink: #16213d;
+  --blue: #2c6fd1;
+  --sky: #4aa3f0;
+  --yellow: #ffd23f;
+  --thorn: #c2357a;
+  --curse: #7a2ad8;
+  --muted-ink: #3a4a6a;
+  --font: "Fredoka", "Trebuchet MS", "Segoe UI", system-ui, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; background: var(--forest); overflow: hidden; }
+body { font-family: var(--font); color: var(--navy-ink); -webkit-font-smoothing: antialiased; }
+[hidden] { display: none !important; }
+#game { position: fixed; inset: 0; display: block; outline: none; touch-action: none; }
+
+/* HUD */
+#hud {
+  position: fixed; left: 12px; right: 12px; top: calc(env(safe-area-inset-top, 0px) + 12px);
+  display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; align-items: flex-start;
+  pointer-events: none;
+}
+.hud-group { display: flex; flex-wrap: wrap; gap: 8px; }
+.pill, .chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--cream); color: var(--navy-ink);
+  border: 3px solid var(--navy); border-radius: 999px;
+  padding: 4px 14px 5px; font-weight: 600; font-size: 15px;
+  box-shadow: 0 3px 0 var(--navy);
+  font-variant-numeric: tabular-nums;
+}
+.pill .lbl { color: var(--blue); font-weight: 500; }
+.pill svg { width: 16px; height: 16px; flex: none; }
+.pill.fam { padding: 1px 10px; }
+#hud-family { width: 186px; height: 28px; display: block; }
+.area { background: var(--yellow); }
+.boss { background: #2a1446; color: var(--cream); border-color: #120818; box-shadow: 0 3px 0 #120818; }
+.boss .lbl { color: #e8b6ff; font-weight: 700; }
+.segs { display: inline-flex; gap: 4px; }
+.segs i { width: 20px; height: 12px; border: 2px solid #e8b6ff; border-radius: 4px; background: var(--curse); }
+.segs i.broken { border-color: var(--cream); }
+.chip { pointer-events: auto; cursor: pointer; font-family: var(--font); }
+.chip:hover { background: var(--cream-2); }
+.chip:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--navy); }
+kbd {
+  font-family: var(--font); font-size: 0.82em; font-weight: 600;
+  background: #fff; border: 2px solid var(--navy); border-bottom-width: 3px; border-radius: 7px; padding: 0 6px;
+}
+button:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--sky); outline-offset: 3px; }
+
+/* toast and level banner */
+#toast {
+  position: fixed; left: 50%; top: 22%; transform: translate(-50%, -10px) scale(0.9);
+  background: var(--yellow); color: var(--navy-ink); border: 3px solid var(--navy); border-radius: 18px;
+  padding: 8px 20px 10px; font-size: 22px; font-weight: 700; box-shadow: 0 4px 0 var(--navy);
+  opacity: 0; pointer-events: none; white-space: nowrap; max-width: calc(100vw - 32px); overflow: hidden; text-overflow: ellipsis;
+}
+#toast.show { animation: toast 1.9s ease both; }
+@keyframes toast {
+  0% { opacity: 0; transform: translate(-50%, 6px) scale(0.85); }
+  12% { opacity: 1; transform: translate(-50%, 0) scale(1.06); }
+  20% { transform: translate(-50%, 0) scale(1); }
+  82% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -8px) scale(0.98); }
+}
+#banner {
+  position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%);
+  text-align: center; pointer-events: none; opacity: 0; width: max-content; max-width: calc(100vw - 32px);
+}
+#banner.show { animation: banner 2.1s ease both; }
+#banner-area {
+  display: block; font-size: 54px; font-weight: 700; color: var(--cream); line-height: 1;
+  -webkit-text-stroke: 3px var(--navy); paint-order: stroke fill; text-shadow: 0 5px 0 var(--navy);
+}
+#banner-level {
+  display: inline-block; margin-top: 10px; padding: 3px 16px 5px; border-radius: 999px; font-size: 20px; font-weight: 700;
+  background: var(--yellow); border: 3px solid var(--navy); box-shadow: 0 3px 0 var(--navy);
+}
+@keyframes banner {
+  0% { opacity: 0; transform: translate(-50%, -40%) scale(0.8); }
+  14% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+  22% { transform: translate(-50%, -50%) scale(1); }
+  78% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -58%); }
+}
+
+/* cards */
+.overlay {
+  position: fixed; inset: 0; display: grid; place-items: center; padding: 16px;
+  background: radial-gradient(ellipse at center, rgba(16, 36, 22, 0.25), rgba(16, 36, 22, 0.7));
+  overflow-y: auto;
+}
+.card {
+  width: min(440px, 100%); background: var(--cream); border: 4px solid var(--navy); border-radius: 30px;
+  box-shadow: 0 8px 0 var(--navy), 0 24px 60px rgba(0, 0, 0, 0.35);
+  padding: 18px 26px 22px; text-align: center;
+}
+.card.small { width: auto; padding: 16px 30px 18px; }
+.card h1 {
+  margin: 0; font-size: 64px; line-height: 0.95; font-weight: 700; color: var(--sky);
+  -webkit-text-stroke: 3px var(--navy); paint-order: stroke fill;
+  text-shadow: 0 5px 0 var(--navy); letter-spacing: 0.01em;
+}
+.card h2 { margin: 0 0 6px; font-size: 30px; color: var(--navy); }
+.card .sub { margin: 6px 0 2px; font-size: 21px; font-weight: 600; color: var(--navy); }
+.card .build {
+  display: inline-block; margin: 8px 0 12px; padding: 2px 12px; border-radius: 999px;
+  background: var(--yellow); border: 2px solid var(--navy); font-size: 13px; font-weight: 600;
+}
+.card p { margin: 0; }
+#hero { width: 180px; height: 180px; display: block; margin: -6px auto -8px; }
+.buttons { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; }
+.big {
+  font-family: var(--font); font-size: 26px; font-weight: 700; color: var(--navy-ink);
+  background: var(--yellow); border: 4px solid var(--navy); border-radius: 20px;
+  padding: 8px 40px 10px; cursor: pointer; box-shadow: 0 6px 0 var(--navy);
+  transition: transform 80ms ease, box-shadow 80ms ease;
+}
+.big.alt { background: var(--cream); font-size: 20px; padding: 8px 18px 10px; }
+.big .small-line { display: block; font-size: 12px; font-weight: 600; color: var(--blue); }
+.big:hover { filter: brightness(1.04); transform: translateY(-1px); box-shadow: 0 7px 0 var(--navy); }
+.big:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--navy); }
+.link-btn {
+  font-family: var(--font); font-size: 15px; font-weight: 600; color: var(--blue); background: none; border: 0;
+  text-decoration: underline; text-underline-offset: 3px; cursor: pointer; padding: 4px 6px;
+}
+.keys { list-style: none; padding: 0; margin: 12px 0 8px; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; font-size: 15px; font-weight: 500; }
+.goal { font-size: 15px; color: var(--muted-ink); line-height: 1.4; }
+.lore { margin: 12px 0 2px !important; font-size: 16px; line-height: 1.4; color: var(--navy-ink); font-weight: 500; }
+.lore b { color: var(--curse); }
+.best { margin-top: 8px !important; font-size: 14px; font-weight: 600; color: var(--blue); }
+.touch-note { margin-top: 10px !important; font-size: 13px; color: var(--thorn); font-weight: 600; }
+@media (hover: hover) and (pointer: fine) { .touch-note { display: none; } }
+.stats { display: grid; grid-template-columns: auto auto; gap: 4px 18px; justify-content: center; margin: 12px 0 18px; font-size: 17px; text-align: left; }
+.stats dt { color: var(--blue); font-weight: 500; }
+.stats dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+/* storybook */
+.story-overlay { background: rgba(10, 6, 20, 0.74); }
+.story-card {
+  width: min(680px, 100%); background: var(--cream); border: 4px solid var(--navy); border-radius: 26px; overflow: hidden;
+  box-shadow: 0 8px 0 var(--navy), 0 24px 60px rgba(0, 0, 0, 0.45);
+}
+#story-canvas { display: block; width: 100%; aspect-ratio: 640 / 300; height: auto; border-bottom: 4px solid var(--navy); background: #1d0f33; }
+.story-body { padding: 14px 22px 18px; }
+.story-kicker {
+  display: inline-block; margin: 0 0 6px; padding: 1px 12px 2px; border-radius: 999px; font-size: 13px; font-weight: 700;
+  background: var(--yellow); border: 2px solid var(--navy); letter-spacing: 0.02em;
+}
+.story-speaker { margin: 0 0 2px; color: var(--curse); font-weight: 700; font-size: 15px; letter-spacing: 0.03em; text-transform: uppercase; }
+#story-text { margin: 0; font-size: 19px; line-height: 1.45; min-height: 3em; max-width: 60ch; }
+.story-nav { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+.story-dots { flex: 1; display: flex; gap: 6px; }
+.story-dots i { width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--navy); }
+.story-dots i.on { background: var(--yellow); }
+.big.compact { font-size: 20px; padding: 6px 28px 8px; border-radius: 16px; box-shadow: 0 5px 0 var(--navy); }
+
+/* developer panel */
+#panel {
+  position: fixed; right: 12px; top: 64px; width: min(320px, calc(100vw - 24px)); max-height: calc(100vh - 80px); overflow-y: auto;
+  background: var(--cream); border: 3px solid var(--navy); border-radius: 20px; box-shadow: 0 5px 0 var(--navy);
+  padding: 12px 16px 16px;
+}
+#panel h3 { margin: 0; font-size: 19px; color: var(--navy); }
+#panel h3 + p { margin: 2px 0 10px; font-size: 13px; color: var(--muted-ink); }
+#panel section + section { margin-top: 14px; padding-top: 12px; border-top: 2px dashed #c9d3ea; }
+.tune-row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; margin-bottom: 8px; font-size: 14px; font-weight: 600; }
+.tune-row output { font-variant-numeric: tabular-nums; color: var(--blue); }
+.tune-row input { grid-column: 1 / -1; width: 100%; accent-color: var(--blue); }
+.gen { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 3px 10px; margin: 0 0 10px; font-size: 13px; }
+.gen dt { color: var(--blue); font-weight: 500; }
+.gen dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.small-btn {
+  font-family: var(--font); font-weight: 600; font-size: 14px; background: var(--yellow); color: var(--navy-ink);
+  border: 2px solid var(--navy); border-radius: 10px; padding: 3px 14px; cursor: pointer; box-shadow: 0 3px 0 var(--navy);
+}
+.check { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; font-weight: 600; }
+.check input { width: 18px; height: 18px; accent-color: var(--blue); }
+.jump { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: 14px; font-weight: 600; }
+.jump select { font-family: var(--font); font-size: 14px; font-weight: 600; border: 2px solid var(--navy); border-radius: 10px; padding: 3px 8px; background: #fff; color: var(--navy-ink); }
+#panel { width: min(360px, calc(100vw - 24px)); }
+#panel, #talk { color-scheme: light; }
+.ai-stats { margin: 10px 0 8px !important; font-size: 13px; font-weight: 600; color: var(--navy); }
+.ai-log { display: grid; gap: 6px; margin-bottom: 10px; }
+.ai-entry { background: #fff; border: 2px solid #c9d3ea; border-radius: 12px; font-size: 13px; }
+.ai-entry summary { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 5px 9px; cursor: pointer; }
+.ai-entry summary b { color: var(--navy); margin-right: auto; }
+.tag { font-size: 11px; font-weight: 700; border-radius: 999px; padding: 0 7px 1px; border: 1.5px solid var(--navy); background: #c9f2c0; }
+.tag.adjusted { background: #fff1a8; }
+.tag.repaired { background: #ffd3a1; }
+.tag.fallback { background: #f6c6dc; }
+.tag.planted { background: #e3d4ff; }
+.ai-body { padding: 0 9px 8px; }
+.ai-body p { margin: 4px 0 0; line-height: 1.35; }
+.ai-step { color: var(--blue); font-weight: 600; }
+.ai-body pre {
+  margin: 2px 0 0; padding: 5px 7px; border-radius: 8px; background: #f2f5fc; color: var(--navy-ink);
+  font: 500 12px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.ai-ok { color: #2d7a35; font-weight: 600; }
+.ai-v { padding-left: 8px; border-left: 3px solid #c9d3ea; }
+.ai-v.fixed { border-color: #e2b400; }
+.ai-v.repair { border-color: #f08a24; }
+.ai-v.hard { border-color: var(--thorn); color: #7d1d4b; font-weight: 600; }
+.ai-final { font-weight: 600; color: var(--navy); }
+.hint { margin: 2px 0 8px !important; font-size: 12px; color: var(--muted-ink); }
+
+/* conversation box */
+#talk {
+  position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); transform: translateX(-50%);
+  width: min(660px, calc(100vw - 24px)); max-height: calc(100vh - 90px); overflow-y: auto;
+  display: grid; grid-template-columns: 104px minmax(0, 1fr); gap: 2px 14px; align-items: start;
+  background: var(--cream); border: 4px solid var(--navy); border-radius: 24px;
+  box-shadow: 0 6px 0 var(--navy), 0 20px 50px rgba(0, 0, 0, 0.35);
+  padding: 12px 16px 14px; animation: talk-in 180ms ease-out both;
+}
+@keyframes talk-in { from { opacity: 0; transform: translate(-50%, 16px); } to { opacity: 1; transform: translate(-50%, 0); } }
+#talk-portrait {
+  width: 104px; height: 104px; display: block; border-radius: 18px; border: 3px solid var(--navy);
+  background: radial-gradient(circle at 50% 70%, #fff8e6, #f3d9a3);
+}
+.talk-main { min-width: 0; }
+.talk-head { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; padding-right: 34px; }
+#talk-name { margin: 0; font-size: 22px; color: var(--navy); line-height: 1.1; }
+.source-chip {
+  font-family: var(--font); font-size: 12px; font-weight: 600; color: var(--navy-ink); cursor: pointer;
+  border: 2px solid var(--navy); border-radius: 999px; padding: 0 9px 1px; background: #c9f2c0;
+}
+.source-chip[data-kind="adjusted"] { background: #fff1a8; }
+.source-chip[data-kind="repaired"] { background: #ffd3a1; }
+.source-chip[data-kind="fallback"] { background: #f6c6dc; }
+#talk-pouch { margin: 0; font-size: 14px; font-weight: 600; color: var(--blue); }
+#talk-line { margin: 6px 0 0; font-size: 19px; line-height: 1.4; min-height: 2.8em; cursor: pointer; overflow-wrap: anywhere; }
+.dots { display: inline-flex; gap: 6px; padding-top: 10px; }
+.dots i { width: 9px; height: 9px; border-radius: 50%; background: var(--blue); animation: dot 0.9s ease-in-out infinite; }
+.dots i:nth-child(2) { animation-delay: 0.15s; }
+.dots i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes dot { 0%, 100% { transform: translateY(0); opacity: 0.45; } 40% { transform: translateY(-6px); opacity: 1; } }
+#talk-options { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 10px; counter-reset: opt; }
+.talk-opt {
+  position: relative; font-family: var(--font); font-size: 16px; font-weight: 600; color: var(--navy-ink); text-align: left;
+  background: #fff; border: 3px solid var(--navy); border-radius: 14px; padding: 5px 14px 6px; cursor: pointer;
+  box-shadow: 0 3px 0 var(--navy); transition: transform 80ms ease, box-shadow 80ms ease;
+}
+.talk-opt::before {
+  counter-increment: opt; content: counter(opt);
+  position: absolute; top: -9px; left: -9px; width: 19px; height: 19px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700; color: #fff; background: var(--navy);
+}
+@media (hover: none) { .talk-opt::before { display: none; } }
+.talk-opt:hover:not(:disabled) { background: var(--cream-2); }
+.talk-opt:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--navy); }
+.talk-opt:disabled { opacity: 0.5; cursor: default; }
+.talk-opt.shop { display: flex; flex-direction: column; }
+.talk-opt small { font-size: 12px; font-weight: 500; color: var(--blue); }
+.talk-opt.primary { background: var(--yellow); }
+.talk-opt.primary:hover:not(:disabled) { background: #ffdc66; }
+.talk-opt.quiet { background: transparent; border-color: transparent; box-shadow: none; color: var(--blue); text-decoration: underline; text-underline-offset: 3px; }
+#talk-form { grid-column: 1 / -1; display: flex; gap: 8px; margin-top: 10px; }
+#talk-input {
+  flex: 1; min-width: 0; font-family: var(--font); font-size: 16px; font-weight: 500; color: var(--navy-ink);
+  background: #fff; border: 3px solid var(--navy); border-radius: 12px; padding: 5px 12px;
+}
+#talk-input::placeholder { color: #7f8aa6; }
+#talk-close {
+  position: absolute; top: 8px; right: 10px; width: 32px; height: 32px; border-radius: 50%;
+  font-family: var(--font); font-size: 20px; font-weight: 700; line-height: 1; color: var(--navy-ink);
+  background: #fff; border: 2px solid var(--navy); cursor: pointer;
+}
+#talk-close:hover { background: var(--cream-2); }
+@media (max-width: 560px) {
+  .card h1 { font-size: 52px; }
+  .pill, .chip { font-size: 13px; padding: 3px 10px 4px; }
+  #toast { font-size: 18px; }
+  #banner-area { font-size: 40px; }
+  #story-text { font-size: 16px; }
+  #talk { grid-template-columns: 68px minmax(0, 1fr); padding: 10px 12px 12px; width: calc(100vw - 16px); }
+  #talk-portrait { width: 68px; height: 68px; border-radius: 14px; }
+  #talk-name { font-size: 19px; }
+  #talk-line { font-size: 16px; }
+  .talk-opt { font-size: 14px; padding: 4px 10px 5px; }
+}
+@media (prefers-reduced-motion: reduce) { #talk, .dots i { animation: none; } }
+@media (prefers-reduced-motion: reduce) { #toast.show, #banner.show { animation-duration: 2.4s; } .big { transition: none; } }
+</style>
+</head>
+<body>
+<canvas id="game" tabindex="0" aria-label="Fuzzle and the Shifting Woods: game view"></canvas>
+
+<div id="hud">
+  <div class="hud-group">
+    <span class="pill" id="pill-seeds" title="Sparkle seeds">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1 C12 5 12 9 8 15 C4 9 4 5 8 1 Z" fill="#ffd23f" stroke="#b97a05" stroke-width="1.5"/></svg>
+      <b id="hud-seeds">0 / 0</b>
+    </span>
+    <span class="pill" title="Seed pouch: seeds banked from cleared levels, spent at Croaksworth's stall">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.5 L11 3.5 L9.6 5.6 C13 6.6 14.4 9.6 13.6 12.2 C13 14.2 10.8 15 8 15 C5.2 15 3 14.2 2.4 12.2 C1.6 9.6 3 6.6 6.4 5.6 Z" fill="#d9a35b" stroke="#7a4a12" stroke-width="1.3" stroke-linejoin="round"/><path d="M6.4 5.6 L9.6 5.6" stroke="#7a4a12" stroke-width="1.3"/></svg>
+      <span class="lbl">Pouch</span> <b id="hud-pouch">0</b>
+    </span>
+    <span class="pill" id="pill-charm" hidden title="Bubble charms: each one blocks a single hit">
+      <svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.3" fill="#bfefff" stroke="#2c6fd1" stroke-width="1.5"/><path d="M5 6 Q6 4.2 8 4" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round"/></svg>
+      <b id="hud-charm">× 0</b>
+    </span>
+    <span class="pill boss" id="hud-boss" hidden><span class="lbl">Oink</span> <span class="segs" id="boss-segs"><i></i><i></i><i></i></span></span>
+    <span class="pill"><span class="lbl">Poofs</span> <b id="hud-poofs">0</b></span>
+    <span class="pill"><span class="lbl">Time</span> <b id="hud-time">0.0</b></span>
+    <span class="pill" id="pill-par" title="Finish under par for a bonus cheer"><span class="lbl">Par</span> <b id="hud-par">–</b></span>
+    <span class="pill fam" title="Heart Crystals found and family freed"><canvas id="hud-family" width="186" height="28" role="img" aria-label="Heart Crystals and family"></canvas></span>
+  </div>
+  <div class="hud-group">
+    <span class="pill area" id="hud-area">Mossy Woods · 1-1</span>
+    <button class="chip" id="panel-btn" type="button" aria-expanded="false" aria-controls="panel">Dev <kbd>T</kbd></button>
+    <button class="chip" id="music-btn" type="button" aria-pressed="true">Music on</button>
+    <button class="chip" id="sound-btn" type="button" aria-pressed="true">Sound on</button>
+  </div>
+</div>
+
+<div id="toast" role="status" aria-live="polite"></div>
+<div id="banner" aria-hidden="true"><span id="banner-area">Mossy Woods</span><span id="banner-level">Level 1-1</span></div>
+
+<aside id="panel" hidden aria-label="Developer panel">
+  <section id="ai-section">
+    <h3>AI dialogue</h3>
+    <p>A generator drafts every NPC line from the game's real state. The guard checks each draft before it is shown: facts, prices, directions, names, and staying in character. A bad draft gets one retry, then a written line.</p>
+    <dl class="gen"><dt>Generator</dt><dd id="ai-generator">Built-in (offline)</dd></dl>
+    <label class="check" for="ai-plant"><input type="checkbox" id="ai-plant"> Plant mistakes in drafts</label>
+    <p class="hint">Slips wrong prices, directions, names and modern words into drafts, so you can watch the guard catch them.</p>
+    <label class="tune-row" for="ai-rate"><span>Mistake rate</span><output id="ai-rate-out">50%</output><input type="range" id="ai-rate" min="10" max="100" step="5" value="50"></label>
+    <label class="tune-row" for="ai-generosity"><span>Croaksworth's generosity</span><output id="ai-generosity-out">50%</output><input type="range" id="ai-generosity" min="0" max="100" step="5" value="50"></label>
+    <p class="hint">Personality moves his prices; the guard's price limits never move.</p>
+    <p class="ai-stats" id="ai-stats"></p>
+    <div class="ai-log" id="ai-log"></div>
+    <button id="ai-clear" class="small-btn" type="button">Clear log</button>
+  </section>
+  <section>
+    <h3>Level generator</h3>
+    <p>Every fall regrows the level from a new seed. A layout only ships if the checker proves every seed and the portal can be reached.</p>
+    <dl class="gen" id="gen-info"></dl>
+    <button id="regrow-btn" class="small-btn" type="button">Regrow now</button>
+    <label class="check" for="route-toggle"><input type="checkbox" id="route-toggle"> Show the guaranteed route</label>
+    <label class="jump" for="jump-select">Jump to
+      <select id="jump-select">
+        <option value="">Choose a level</option>
+        <option value="1-1">1-1 Mossy Woods</option>
+        <option value="1-2">1-2</option>
+        <option value="1-3">1-3 (Ember's cage)</option>
+        <option value="2-1">2-1 Crystal Caves</option>
+        <option value="2-2">2-2</option>
+        <option value="2-3">2-3 (Sunny's cage)</option>
+        <option value="3-1">3-1 Cloud Tops</option>
+        <option value="3-2">3-2</option>
+        <option value="3-3">3-3 (Mallow's cage)</option>
+        <option value="boss">Oink's Tower</option>
+      </select>
+    </label>
+  </section>
+  <section>
+    <h3>Feel tuning</h3>
+    <p>Drag a slider and feel the change right away.</p>
+    <div id="tune-rows"></div>
+    <button id="tune-reset" class="small-btn" type="button">Reset to defaults</button>
+  </section>
+</aside>
+
+<section id="talk" hidden role="dialog" aria-labelledby="talk-name">
+  <canvas id="talk-portrait" width="104" height="104" aria-hidden="true"></canvas>
+  <div class="talk-main">
+    <div class="talk-head">
+      <h2 id="talk-name">Old Hoot</h2>
+      <button id="talk-source" class="source-chip" type="button" hidden title="">Generated · checked</button>
+      <p id="talk-pouch" hidden></p>
+    </div>
+    <p id="talk-line" aria-live="polite"></p>
+  </div>
+  <div id="talk-options"></div>
+  <form id="talk-form" autocomplete="off">
+    <input id="talk-input" type="text" maxlength="120" aria-label="Say something" placeholder="Say something…">
+    <button class="small-btn" type="submit">Say</button>
+  </form>
+  <button id="talk-close" type="button" aria-label="Close conversation">×</button>
+</section>
+
+<div id="pause" class="overlay" hidden>
+  <div class="card small"><h2>Paused</h2><p>Press <kbd>P</kbd> to keep playing.</p></div>
+</div>
+
+<section id="done" class="overlay" hidden aria-labelledby="done-h">
+  <div class="card">
+    <h2 id="done-h">The whole family is home!</h2>
+    <p class="goal">Fuzzle crossed the Mossy Woods, the Crystal Caves, and the Cloud Tops, and broke Oink's spell.</p>
+    <dl class="stats" id="done-stats"></dl>
+    <div class="buttons">
+      <button id="again-btn" class="big" type="button">New run</button>
+      <button id="replay-btn" class="big alt" type="button">Same seed</button>
+    </div>
+  </div>
+</section>
+
+<section id="title" class="overlay" aria-labelledby="title-h">
+  <div class="card">
+    <canvas id="hero" width="180" height="180" aria-label="Fuzzle, a round fluffy blue creature with yellow cheeks, belly and tail"></canvas>
+    <h1 id="title-h">Fuzzle</h1>
+    <p class="sub">and the Shifting Woods</p>
+    <span class="build">Step 4 build · talking friends</span>
+    <div class="buttons">
+      <button id="play-btn" class="big" type="button">Play</button>
+      <button id="daily-btn" class="big alt" type="button">Daily run<span class="small-line" id="daily-date"></span></button>
+    </div>
+    <p class="lore">The warlock <b>Oink</b> stole Fuzzle's family and cursed the land. Gather the three Heart Crystals, free everyone, and break his spell.</p>
+    <button id="story-btn" class="link-btn" type="button">Watch the story</button>
+    <ul class="keys">
+      <li><kbd>WASD</kbd> or arrows: move</li>
+      <li><kbd>Space</kbd>: dash</li>
+      <li><kbd>E</kbd>: talk</li>
+      <li><kbd>T</kbd>: developer panel</li>
+    </ul>
+    <p class="goal">Collect every sparkle seed to wake the portal. Fall, and the cursed land reshapes itself.</p>
+    <p class="best" id="best-run"></p>
+    <p class="touch-note">Needs a keyboard or gamepad for now. Touch controls come in a later step.</p>
+  </div>
+</section>
+
+<section id="story" class="overlay story-overlay" hidden aria-label="Story">
+  <div class="story-card">
+    <canvas id="story-canvas" aria-hidden="true"></canvas>
+    <div class="story-body">
+      <p class="story-kicker" id="story-kicker" hidden></p>
+      <p class="story-speaker" id="story-speaker" hidden></p>
+      <p id="story-text" aria-live="polite"></p>
+      <div class="story-nav">
+        <span class="story-dots" id="story-dots" aria-hidden="true"></span>
+        <button id="story-skip" class="link-btn" type="button">Skip</button>
+        <button id="story-next" class="big compact" type="button">Next</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script src="engine.js"></script>
+<script src="fx.js"></script>
+<script src="music.js"></script>
+<script src="fuzzle.js"></script>
+<script src="family.js"></script>
+<script src="oink.js"></script>
+<script src="areas.js"></script>
+<script src="levels.js"></script>
+<script src="critters.js"></script>
+<script src="world.js"></script>
+<script src="boss.js"></script>
+<script src="npcs.js"></script>
+<script src="brain.js"></script>
+<script src="story.js"></script>
+<script src="talk.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
