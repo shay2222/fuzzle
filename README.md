@@ -4,6 +4,8 @@ A cute top-down roguelite adventure that runs in the browser. Fuzzle, a fluffy b
 
 **Play it:** https://shay2222.github.io/fuzzle/
 
+**Project page:** https://shay2222.github.io/fuzzle-portfolio/
+
 ## How to play
 
 | Key | Action |
